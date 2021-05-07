@@ -1,0 +1,124 @@
+---
+title: "Data Processing Project"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,message = F,warning = F)
+```
+
+## Introduction
+This data set is a snapshot of Melbourne Housing, including the variables such as `Rooms` meaning number of rooms, `Price` meaning price in dollars, `Regionname` meaning general region, `Propertycount` meaning number of properties in the suburb, `Distance` meaning the distance from CBD and so on. I want use this data set to find a trend and give a prediction for the price of house. 
+
+In this project, I try to clean and process the data firsly. Then I do some descriptive statistics analysis through tables and plots. Finally I build a linear regression model to predict the price of the house using these predictors.
+
+## Data processing 
+We use the data in [https://www.kaggle.com/anthonypino/melbourne-housing-market](https://www.kaggle.com/anthonypino/melbourne-housing-market). We download the data set from the above website and import the data set into R:
+```{r}
+library(tidyverse)
+# read the data
+data = read.csv("melb_data.csv")
+```
+
+Since we are interested in the above five variables `Rooms`, `Price`, `Regionname`, `Propertycount`,`Distance`, I delete the observations, which has missing values in these five variables and extract these five variables for the following analysis:
+```{r}
+# delete the missing values 
+index = !is.na(data$Price) & !is.na(data$Rooms) &
+  !is.na(data$Regionname) & !is.na(data$Propertycount) & 
+  !is.na(data$Distance)
+# extract these five variables
+data = data[index,
+            c("Price","Rooms","Regionname","Propertycount","Distance")]
+```
+Now the data set consists 13580 oservations.
+
+## Descriptive statistics analysis
+Firstly, I make a histogram for the `Price` to see the distribution.
+From the plot, we can see that `Price` is right skewed. 
+```{r}
+# histogram of price
+hist(data$Price,prob=T,main="Distribution of Price",
+     xlab="Price",col=hcl(0),breaks=20)
+lines(density(data$Price),col=hcl(200))
+```
+
+Secondly, I make a histogram for the `Distance` to see the distribution, which is also a little right skewed. 
+```{r}
+# histogram of distance
+hist(data$Distance,prob=T,xlab='Distance',
+     main='Distribution of distance',col=hcl(0),breaks=20)
+lines(density(data$Distance),col=hcl(200))
+```
+
+Since the distance in the database is not a continuous variable, I build a scatter plot to see the distance-price relation in the Northern Metropolitan.
+```{r}
+price_plot <- ggplot(data = filter(data, Regionname == 'Northern Metropolitan'), aes(Distance, Price)) +geom_point() + ggtitle('Price vs Distance in Northern Metropolitan')
+price_plot
+```
+
+Then I build another scatter plot to see the distance-price relation in the whole city of Melbourne.
+```{r}
+price_plot <- ggplot(data, aes(Distance, Price)) + 
+geom_point(aes(colour = Regionname)) + ggtitle('Price vs Distance')
+price_plot
+```
+
+Next, I make a scatter plot for `Price` and `Rooms` with `Price` at the vertical axis and color the data by `Regionname`. From above figures, we can see all regions with same "direction" share the same trend on the price.(For example, all regions whose name starting with "south" tend to have higher prices.) So we combine the regions into 4 classes, i.e., north, south, west and east, and make a more general analysis.
+```{r}
+# combine the Region into 4 classes
+data[data$Regionname=="Northern Metropolitan" |
+       data$Regionname=="Northern Victoria","Regionname"] = "North"
+data[data$Regionname=="Eastern Metropolitan" |
+       data$Regionname=="Eastern Victoria" | 
+       data$Regionname=="South-Eastern Metropolitan",
+     "Regionname"] = "East"
+data[data$Regionname=="Western Metropolitan" |
+       data$Regionname=="Western Victoria","Regionname"] = "West"
+data[data$Regionname=="Southern Metropolitan" |
+       data$Regionname=="Southern Victoria","Regionname"] = "South"
+# define the color
+data$col = NULL
+for (i in 1:nrow(data)){
+  if (data[i,"Regionname"]=="North"){data[i,"col"]="red"}
+  else if (data[i,"Regionname"]=="East"){data[i,"col"]="black"}
+  else if (data[i,"Regionname"]=="West"){data[i,"col"]="blue"}
+  else if (data[i,"Regionname"]=="South"){data[i,"col"]="green"}
+}
+# scatter plot 
+plot(Price~Rooms,data=data,cex=0.5,main="Price against Rooms",
+     col =data$col)
+legend("topright",legend=c("North","East","West","South"),
+       col=c("red","black","blue","green"),cex=0.6,pch=c(1,1,1,1))
+```
+
+From the scatter plot, we can see that as the number of rooms changes from 1 to 5, the price increases gradually. Furthermore, we can see that the price of house in southern area is the highest among the four regions while the prices of house in northern and western area are lower. We can also obtain the same conclusion through a boxplot for the `Price` grouped by `Region`.
+```{r}
+# boxplot for price grouped by region
+boxplot(data$Price~data$Regionname,
+     col=hcl(c(0,60,120,180,240,300,360,420)),
+     xlab="Region",ylab="Price",
+     main="Boxplot of price for different regions")
+```
+
+## Linear regression
+Finally, I build a linear regression model using `Price` as dependent variable and other four variables as predictors. 
+```{r}
+library(knitr)
+# linear regression model
+model = lm(Price~Rooms+Regionname+Propertycount+Distance,data=data)
+```
+
+The regression result is as follows:
+```{r}
+# regression result
+kable(summary(model)$coef,
+      caption="Coefficients estimates of linear regression")
+```
+
+From the results, we can see that the number of `Rooms` has a positive impact on the house price. The house in southern area is highest and then the house in eastern area and then the house in northern area and then the house in western area. The distance has a negative impact on the house price, which means that the more closed the house with CBD, the higher price the house has.
+
+Finally, I export the data and save it as "Melbourne_Housing.csv".
+```{r}
+write.table(data,"Melbourne_Housing.csv",
+            row.names=FALSE,col.names=TRUE,sep=",")
+```
